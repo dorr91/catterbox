@@ -8,15 +8,25 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import comm.Message;
 
 public class Server implements Runnable {
     final static int MASTER = 0;
     final static int LISTENER = 1;
-    int purpose, port;
-    static Map<Socket, InputStream> clientInputs;
-    static Map<Socket, OutputStream> clientOutputs;
+    int purpose;
+    static int port;
+    
+    static Map<Socket, ObjectInputStream> clientInputs = 
+            new HashMap<Socket, ObjectInputStream>();
+    static Map<Socket, ObjectOutputStream> clientOutputs = 
+            new HashMap<Socket, ObjectOutputStream>();
+    static Map<Date, Message> timeToMessage = 
+            new HashMap<Date, Message>();
     boolean exiting = false;
     
     public static void main(String[] args) {
@@ -25,23 +35,20 @@ public class Server implements Runnable {
         }
         Server s = new Server(MASTER, 0);
         s.run();
-
     }
+    
     public Server(int purpose, int port) {
         this.port = port;
         this.purpose = purpose;
-        clientInputs = new HashMap<Socket, InputStream>();
-        clientOutputs = new HashMap<Socket, OutputStream>();
     }
     
     public void run() {
         switch(purpose) {
         case MASTER:
-            System.out.println("Starting server on port " + port);
-
             Runnable listener = new Server(LISTENER, port);
             Thread listenerThread = new Thread(listener);
             listenerThread.start();
+            
             break;
             
         case LISTENER:
@@ -54,13 +61,14 @@ public class Server implements Runnable {
         try {
             ServerSocket ss = new ServerSocket(port);
             port = ss.getLocalPort();
+            System.out.println("Started server on port " + port);
 
             while(!exiting) {
                 try {
                     Socket clientSocket = ss.accept();
-                    OutputStream clientOut = 
+                    ObjectOutputStream clientOut = 
                             new ObjectOutputStream(clientSocket.getOutputStream());
-                    InputStream clientIn =
+                    ObjectInputStream clientIn =
                             new ObjectInputStream(clientSocket.getInputStream());
                     clientOutputs.put(clientSocket, clientOut);
                     clientInputs.put(clientSocket, clientIn);
@@ -78,6 +86,24 @@ public class Server implements Runnable {
             System.out.println("Couldn't start server:");
             e.printStackTrace();
             return;
+        }
+    }
+    
+    void update(Socket client) {
+        ObjectInputStream in = clientInputs.get(client);
+        ObjectOutputStream out = clientOutputs.get(client);
+        try {
+            //read the last message received by the client
+            Message last = (Message)in.readObject();
+            //get the equivalent message from our timestamp map
+            //this message may have a next message, which is the linked list of all
+            //more recent messages we have saved.
+            Message updates = timeToMessage.get(last.getTime());
+            //send it back
+            out.writeObject(updates);
+        } catch (Exception e) {
+            System.out.println("Couldn't read message from client:");
+            e.printStackTrace();
         }
     }
 }
