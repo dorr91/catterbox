@@ -32,8 +32,6 @@ public class Client {
             System.out.println("Initialization exception:");
             e.printStackTrace();
         }
-        
-        
     }
     
     public Client(String hostname, int port) 
@@ -119,7 +117,7 @@ public class Client {
 
             //tell the server we have a new message
             out.writeObject("push");
-            //send the new message
+            //send the new message (as a string)
             out.writeObject(msg.getContent());
             
             //read back a message object containing all the messages we've missed
